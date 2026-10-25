@@ -7,7 +7,7 @@ $root = Split-Path $PSScriptRoot -Parent
 $repo = (Get-Content (Join-Path $PSScriptRoot "launcher.json") -Raw | ConvertFrom-Json).update_repo
 $version = [regex]::Match((Get-Content (Join-Path $PSScriptRoot "launcher.py") -Raw), 'VERSION = "([^"]+)"').Groups[1].Value
 if (-not $repo -or -not $version) { throw "update_repo (launcher.json) ou VERSION (launcher.py) introuvable." }
-gh release view "v$version" --repo $repo *> $null
+cmd /c "gh release view v$version --repo $repo >nul 2>&1"
 if ($LASTEXITCODE -eq 0) { throw "La version v$version est déjà publiée : augmente VERSION dans launcher.py." }
 
 & (Join-Path $PSScriptRoot "build_exe.ps1")
