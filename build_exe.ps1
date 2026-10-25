@@ -1,4 +1,4 @@
-# Construit SurvivalFrench-Launcher.exe à la racine du projet.
+﻿# Construit SurvivalFrench-Launcher.exe à la racine du projet.
 # Usage : powershell -ExecutionPolicy Bypass -File launcher\build_exe.ps1
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent

@@ -1,4 +1,4 @@
-# Compile le launcher et le publie en release GitHub : tous les launchers installés se mettent à jour au prochain démarrage.
+﻿# Compile le launcher et le publie en release GitHub : tous les launchers installés se mettent à jour au prochain démarrage.
 # Avant : augmenter VERSION dans launcher.py (ex : 1.2.0 -> 1.2.1).
 # Usage : powershell -ExecutionPolicy Bypass -File launcher\publish.ps1 "Ce qui change"
 param([string]$Notes = "")
