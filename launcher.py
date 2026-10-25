@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -30,7 +31,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 APP_NAME = "SurvivalFrench Launcher"
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 
 
 def _instance() -> int:
@@ -627,6 +628,94 @@ def sync_mods(m: dict) -> None:
     for f in mods_dir.glob("*.jar"):
         if f.name not in wanted:
             f.unlink()
+    sync_shaderpacks(m)
+
+
+# Qualité des shaders selon la carte graphique : profil du pack (Complementary : POTATO à ULTRA) et échelle de
+# rendu de Vitrail (le monde est rendu plus petit puis agrandi, l'interface reste nette).
+# Sur une puce intégrée, les shaders sont installés mais coupés (touche K) : le but est 100 images/s ou plus.
+GPU_TIERS = {
+    "low": {"shaders": False, "profile": "POTATO", "renderscale": 67},
+    "mid": {"shaders": True, "profile": "LOW", "renderscale": 85},
+    "high": {"shaders": True, "profile": "MEDIUM", "renderscale": 100},
+}
+# Réglages vidéo de départ selon la carte (appliqués une seule fois, le joueur peut les changer ensuite).
+PERF_OPTIONS = {
+    "low": {"renderDistance": "8", "simulationDistance": "6", "biomeBlendRadius": "0", "entityShadows": "false",
+            "cloudRange": "64", "renderClouds": '"fast"', "mipmapLevels": "2", "maxAnisotropyBit": "0",
+            "entityDistanceScaling": "0.75", "weatherRadius": "5", "chunkSectionFadeInTime": "0.0",
+            "enableVsync": "false", "maxFps": "260", "graphicsPreset": '"custom"'},
+    "mid": {"renderDistance": "10", "simulationDistance": "8", "biomeBlendRadius": "1", "enableVsync": "false",
+            "maxFps": "260"},
+    "high": {"enableVsync": "false", "maxFps": "260"},
+}
+SHADER_MARKER = "survivalfrench-shaders.done"
+PERF_MARKER = "survivalfrench-perf.done"
+_GPU_TIER: str | None = None
+
+
+def detected_tier() -> str:
+    global _GPU_TIER
+    if _GPU_TIER is None:
+        _GPU_TIER = gpu_tier(gpu_names())
+    return _GPU_TIER
+
+
+def gpu_names() -> list[str]:
+    """Cartes graphiques vues par Windows (vide ailleurs ou en cas d'échec)."""
+    if os.name != "nt":
+        return []
+    try:
+        out = subprocess.run(["powershell", "-NoProfile", "-Command",
+                              "(Get-CimInstance Win32_VideoController).Name"],
+                             capture_output=True, text=True, timeout=15,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [line.strip() for line in out.splitlines() if line.strip()]
+
+
+def gpu_tier(names: list[str]) -> str:
+    """Meilleure carte trouvée : « high » (RTX, RX 6000+, Arc), « mid » (autre carte dédiée), « low » (puce intégrée)."""
+    best = ""
+    for name in names:
+        n = name.lower()
+        if re.search(r"rtx|rx ?[6-9]\d{3}|\barc\b", n):
+            return "high"
+        if re.search(r"gtx|rx ?\d{3,4}|radeon pro|quadro", n):
+            best = "mid"
+        elif not best and re.search(r"uhd|iris|intel.*hd|radeon\(tm\)|radeon graphics|vega|\d{3}m graphics", n):
+            best = "low"
+    return best or "mid"
+
+
+def sync_shaderpacks(m: dict) -> None:
+    """Packs de shaders du manifeste (téléchargés dans shaderpacks/), et au premier lancement seulement :
+    le premier pack activé dans Vitrail, avec une qualité adaptée à la carte graphique."""
+    packs = m.get("shaderpacks", [])
+    if not packs:
+        return
+    pack_dir = GAME / "shaderpacks"
+    pack_dir.mkdir(parents=True, exist_ok=True)
+    base = manifest_url()
+    for pack in packs:
+        name = Path(pack["file"]).name
+        download(urllib.parse.urljoin(base, pack["url"]), pack_dir / name, pack.get("sha1"), pack.get("size"))
+    marker = GAME / "config" / SHADER_MARKER
+    if marker.exists():
+        return
+    first = Path(packs[0]["file"]).name
+    tier = GPU_TIERS[detected_tier()]
+    vitrail = GAME / "vitrail" / "pack.txt"
+    vitrail.parent.mkdir(parents=True, exist_ok=True)
+    enabled = "true" if tier["shaders"] else "false"
+    vitrail.write_text(f"pack={first}\nenabled={enabled}\nrenderscale={tier['renderscale']}\n", encoding="utf-8")
+    settings = pack_dir / f"{first}.txt"
+    if not settings.exists():
+        settings.write_text(f"profile={tier['profile']}\n", encoding="utf-8")
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(f"shaders : {first} ({enabled}), profil {tier['profile']}, échelle {tier['renderscale']} %",
+                      encoding="utf-8")
 
 
 # --------------------------------------------------------------------------------------
@@ -750,7 +839,11 @@ FORCED_OPTIONS = {
 DEFAULT_OPTIONS = {
     "lang": "fr_fr",
     "resourcePacks": '["vanilla"]',
+    "preferredGraphicsBackend": '"vulkan"',
 }
+# Minecraft écrit « default » dans options.txt dès le premier lancement : une seule fois par installation, ce
+# choix automatique passe sur Vulkan. Un joueur qui revient ensuite sur OpenGL ou Défaut garde son choix.
+VULKAN_MARKER = "survivalfrench-vulkan.done"
 
 
 def first_run_options() -> None:
@@ -769,6 +862,26 @@ def first_run_options() -> None:
         if k not in values:
             values[k] = v
             order.append(k)
+    marker = GAME / "config" / VULKAN_MARKER
+    if not marker.exists():
+        values["preferredGraphicsBackend"] = '"vulkan"'
+        try:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("graphisme : Vulkan par défaut", encoding="utf-8")
+        except OSError:
+            pass
+    perf = GAME / "config" / PERF_MARKER
+    if not perf.exists():
+        tier = detected_tier()
+        for k, v in PERF_OPTIONS[tier].items():
+            if k not in values:
+                order.append(k)
+            values[k] = v
+        try:
+            perf.parent.mkdir(parents=True, exist_ok=True)
+            perf.write_text(f"réglages vidéo de départ : carte « {tier} »", encoding="utf-8")
+        except OSError:
+            pass
     for k, v in FORCED_OPTIONS.items():
         if k not in values:
             order.append(k)
