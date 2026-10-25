@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SurvivalFrench</title>
+<style>
+  :root {
+    --bg: #0b0f15; --panel: #121821; --panel2: #18202c; --border: #263243; --text: #e6edf3; --muted: #8b98a9;
+    --blue: #2b5aa8; --white: #f2f2f2; --red: #d0343a; --accent: #3a8dff; --green: #3fbf6a; --gold: #e3b341;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.45 "Segoe UI", system-ui, sans-serif; overflow: hidden; user-select: none; }
+  .app { display: grid; grid-template-columns: 1fr 380px; height: 100vh; }
+  .hero { position: relative; padding: 34px 40px; overflow-y: auto;
+    background: radial-gradient(1200px 500px at 0% 0%, #1b2c4a 0%, transparent 60%),
+                radial-gradient(900px 500px at 100% 100%, #3a1b22 0%, transparent 55%), var(--bg); }
+  .flag { display: flex; height: 5px; width: 120px; border-radius: 3px; overflow: hidden; margin-bottom: 18px; }
+  .flag i { flex: 1; } .flag i:nth-child(1) { background: var(--blue); } .flag i:nth-child(2) { background: var(--white); } .flag i:nth-child(3) { background: var(--red); }
+  h1 { margin: 0; font-size: 40px; letter-spacing: 1px; font-weight: 800; }
+  h1 span { background: linear-gradient(90deg, #3a7bd5, #00d2ff); -webkit-background-clip: text; color: transparent; }
+  .tag { color: var(--muted); margin: 6px 0 22px; font-size: 15px; }
+  .status { display: inline-flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--border);
+    padding: 8px 14px; border-radius: 999px; margin-bottom: 26px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); box-shadow: 0 0 0 4px #ffffff10; }
+  .dot.on { background: var(--green); box-shadow: 0 0 0 4px #3fbf6a33; } .dot.off { background: var(--red); }
+  .news h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); margin: 0 0 12px; }
+  .card { background: linear-gradient(180deg, #151d29, #111720); border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px 20px; margin-bottom: 14px; }
+  .card .date { color: var(--muted); font-size: 12px; } .card h3 { margin: 2px 0 8px; font-size: 17px; }
+  .card p { margin: 0; color: #c6d0dc; }
+  .side { background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; padding: 26px; gap: 18px; }
+  .account { display: flex; gap: 14px; align-items: center; background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px; }
+  .avatar { width: 52px; height: 52px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; font-weight: 800;
+    background: linear-gradient(135deg, var(--blue), var(--accent)); }
+  .account .name { font-weight: 700; font-size: 16px; } .account .sub { color: var(--muted); font-size: 12px; }
+  .link { color: var(--muted); cursor: pointer; font-size: 12px; text-decoration: underline; }
+  .link:hover { color: var(--text); }
+  button { font: inherit; cursor: pointer; border: 0; border-radius: 12px; color: var(--text); }
+  .btn { background: var(--panel2); border: 1px solid var(--border); padding: 11px 14px; width: 100%; }
+  .btn:hover { background: #1f2a3a; }
+  .ms { background: #2f2f2f; border: 1px solid #444; display: flex; gap: 10px; align-items: center; justify-content: center; padding: 13px; width: 100%; font-weight: 600; }
+  .ms:hover { background: #3a3a3a; }
+  .ms .logo { display: grid; grid-template-columns: 9px 9px; gap: 2px; }
+  .ms .logo i { width: 9px; height: 9px; } .ms .logo i:nth-child(1){background:#f25022}.ms .logo i:nth-child(2){background:#7fba00}.ms .logo i:nth-child(3){background:#00a4ef}.ms .logo i:nth-child(4){background:#ffb900}
+  .code { text-align: center; background: var(--panel2); border: 1px dashed var(--accent); border-radius: 14px; padding: 16px; }
+  .code .big { font-size: 30px; font-weight: 800; letter-spacing: 6px; margin: 6px 0; color: var(--white); cursor: pointer; }
+  .play { margin-top: auto; }
+  .playbtn { width: 100%; padding: 20px; font-size: 22px; font-weight: 800; letter-spacing: 3px;
+    background: linear-gradient(90deg, #2a6be0, #3a8dff); box-shadow: 0 10px 30px #3a8dff40; }
+  .playbtn:hover { filter: brightness(1.1); } .playbtn:disabled { filter: grayscale(0.6) brightness(0.7); cursor: default; }
+  .bar { height: 8px; background: var(--panel2); border-radius: 99px; overflow: hidden; margin: 12px 0 6px; border: 1px solid var(--border); }
+  .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--blue), var(--accent)); transition: width .3s; }
+  .step { font-weight: 600; } .detail { color: var(--muted); font-size: 12px; min-height: 18px; }
+  .error { background: #3a1418; border: 1px solid #7a2a31; color: #ffb4b9; border-radius: 12px; padding: 12px; white-space: pre-wrap; font-size: 12px; max-height: 160px; overflow: auto; }
+  .row { display: flex; gap: 8px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  input[type=text] { width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--border); background: #0c1118; color: var(--text); font: inherit; }
+  .modal { position: fixed; inset: 0; background: #000a; display: none; place-items: center; }
+  .modal.open { display: grid; }
+  .dialog { width: 460px; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+  .dialog h2 { margin: 0 0 16px; }
+  label { display: block; margin: 14px 0 6px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="app">
+  <main class="hero">
+    <div class="flag"><i></i><i></i><i></i></div>
+    <h1><span id="srvname">SURVIVALFRENCH</span> RP</h1>
+    <div class="tag">La vie réelle, version Minecraft — villes, métiers, entreprises, services publics.</div>
+    <div class="status"><span class="dot" id="dot"></span><span id="srvstatus">Connexion au serveur…</span></div>
+    <section class="news"><h2>Actualités</h2><div id="news"></div></section>
+  </main>
+
+  <aside class="side">
+    <div id="accountBox"></div>
+    <div id="loginBox"></div>
+
+    <div class="play">
+      <div id="taskBox" class="hidden">
+        <div class="step" id="step"></div>
+        <div class="bar"><i id="bar"></i></div>
+        <div class="detail" id="detail"></div>
+      </div>
+      <div id="errorBox" class="error hidden"></div>
+      <div style="height:12px"></div>
+      <button class="playbtn" id="play">JOUER</button>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="settingsBtn">Paramètres</button>
+        <button class="btn" id="folderBtn">Dossier du jeu</button>
+      </div>
+      <div class="muted" style="margin-top:10px;text-align:center" id="ver"></div>
+    </div>
+  </aside>
+</div>
+
+<div class="modal" id="settings">
+  <div class="dialog">
+    <h2>Paramètres</h2>
+    <label>Mémoire allouée : <b id="ramLabel"></b></label>
+    <input type="range" id="ram" min="2048" max="12288" step="512">
+    <div class="muted">4 Go conviennent à la plupart des PC. Ne dépasse pas la moitié de ta RAM.</div>
+    <label>Adresse du serveur (manifeste)</label>
+    <input type="text" id="manifest" spellcheck="false">
+    <div class="muted">Laisse vide pour l'adresse officielle.</div>
+    <div class="row" style="margin-top:20px">
+      <button class="btn" id="cancelSettings">Annuler</button>
+      <button class="btn" id="saveSettings" style="background:var(--blue)">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const post = (path, body) => fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})}).then(r => r.json());
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+let last = null, newsKey = "", loginKey = "", accountKey = "";
+
+function render(s) {
+  last = s;
+  $("ver").textContent = "Launcher " + s.version + (s.instance > 1 ? " • compte " + s.instance : "") + (s.allow_offline ? " • DEV" : "");
+  document.title = "SurvivalFrench" + (s.instance > 1 ? " — compte " + s.instance : "");
+  const m = s.manifest;
+  if (m) {
+    $("srvname").textContent = (m.name || "SurvivalFrench").replace(/ RP$/i, "").toUpperCase();
+    $("dot").className = "dot on";
+    $("srvstatus").textContent = `En ligne — ${m.server.online} / ${m.server.max} joueurs • Minecraft ${m.minecraft}`;
+    const key = JSON.stringify(m.news);
+    if (key !== newsKey) {
+      newsKey = key;
+      $("news").innerHTML = (m.news || []).map(n => `<div class="card"><div class="date">${esc(n.date)}</div><h3>${esc(n.title)}</h3><p>${esc(n.text)}</p></div>`).join("")
+        || `<div class="card"><p>Aucune actualité.</p></div>`;
+    }
+  } else {
+    $("dot").className = "dot off";
+    $("srvstatus").textContent = s.manifest_error ? "Serveur injoignable" : "Connexion au serveur…";
+  }
+
+  // Compte
+  const a = s.account;
+  const aKey = JSON.stringify(a);
+  if (aKey !== accountKey) {
+    accountKey = aKey;
+    if (a && a.offline && last && last.allow_offline) {
+      $("accountBox").innerHTML = `<div class="account" style="flex-direction:column;align-items:stretch">
+        <div class="sub">Pseudo (compte de développement)</div>
+        <div class="row"><input type="text" id="pseudo" value="${esc(a.name)}" maxlength="16" spellcheck="false">
+        <button class="btn" style="width:auto" id="pseudoBtn">Changer</button></div></div>`;
+      $("pseudoBtn").onclick = () => post("/api/offline", {name: $("pseudo").value}).then(r => r.error && alert(r.error));
+      $("pseudo").onkeydown = e => { if (e.key === "Enter") $("pseudoBtn").click(); };
+    } else
+    $("accountBox").innerHTML = a ? `<div class="account">
+        <div class="avatar">${esc(a.name[0].toUpperCase())}</div>
+        <div style="flex:1"><div class="name">${esc(a.name)}</div>
+        <div class="sub">${a.offline ? "Compte de développement" : "Compte Microsoft"}</div></div>
+        <span class="link" id="logout">Déconnexion</span></div>` : "";
+    if (a) $("logout").onclick = () => post("/api/logout");
+  }
+
+  // Connexion
+  const l = s.login;
+  const lKey = JSON.stringify([!!a, l, s.ms_configured, s.allow_offline, s.official]);
+  if (lKey !== loginKey) {
+    loginKey = lKey;
+    let html = "";
+    if (!a) {
+      if (l && l.user_code) {
+        html = `<div class="code"><div class="muted">Va sur <b>${esc(l.url)}</b> et saisis ce code :</div>
+          <div class="big" id="code" title="Copier">${esc(l.user_code)}</div>
+          <button class="btn" id="openMs">Ouvrir la page Microsoft</button>
+          <div class="muted" style="margin-top:8px">En attente de validation… <span class="link" id="cancelLogin">Annuler</span></div></div>`;
+      } else if (l && !l.error) {
+        html = `<div class="code"><div class="muted">Préparation de la connexion…</div></div>`;
+      } else {
+        if (!s.allow_offline) {
+        html = `<button class="ms" id="msLogin"><span class="logo"><i></i><i></i><i></i><i></i></span>Se connecter avec Microsoft</button>`;
+        if (l && l.error) html += `<div class="error" style="margin-top:10px">${esc(l.error)}</div>`;
+        if (!s.ms_configured) html += `<div class="muted" style="margin-top:8px">Connexion Microsoft bientôt disponible. En attendant, utilise ton launcher Minecraft officiel :</div>`;
+        html += s.official
+          ? `<button class="btn" id="officialBtn" style="margin-top:8px">Jouer via le launcher Minecraft</button>
+             <div class="muted" style="margin-top:6px">Installe le profil « SurvivalFrench RP » (mods inclus) dans ton launcher Minecraft, qui gère la connexion.</div>`
+          : `<button class="btn" id="getOfficial" style="margin-top:8px">Installer le launcher Minecraft officiel</button>`;
+        }
+        if (s.allow_offline) html += `<label>Pseudo (compte de développement)</label>
+          <div class="row"><input type="text" id="offName" placeholder="Ton pseudo" maxlength="16" spellcheck="false"><button class="btn" style="width:auto" id="offBtn">OK</button></div>`;
+      }
+    }
+    $("loginBox").innerHTML = html;
+    if ($("msLogin")) $("msLogin").onclick = () => post("/api/login");
+    if ($("cancelLogin")) $("cancelLogin").onclick = () => post("/api/login/cancel");
+    if ($("openMs")) $("openMs").onclick = () => post("/api/open", {url: l.url});
+    if ($("code")) $("code").onclick = () => navigator.clipboard.writeText(l.user_code);
+    if ($("officialBtn")) $("officialBtn").onclick = () => post("/api/play_official");
+    if ($("getOfficial")) $("getOfficial").onclick = () => post("/api/open", {url: "https://www.minecraft.net/fr-fr/download"});
+    if ($("offBtn")) $("offBtn").onclick = () => post("/api/offline", {name: $("offName").value}).then(r => r.error && alert(r.error));
+    if ($("offName")) { $("offName").onkeydown = e => { if (e.key === "Enter") $("offBtn").click(); }; $("offName").focus(); }
+  }
+
+  // Tâche
+  const t = s.task;
+  const busy = t.state === "running" || t.state === "playing";
+  $("taskBox").classList.toggle("hidden", !busy && t.state !== "official");
+  $("step").textContent = t.step;
+  $("detail").textContent = t.detail;
+  $("bar").style.width = Math.round((t.progress || 0) * 100) + "%";
+  $("errorBox").classList.toggle("hidden", t.state !== "error");
+  if (t.state === "official") $("detail").innerHTML = esc(t.detail) + ` <span class="link" onclick="post('/api/dismiss')">OK</span>`;
+  if (t.state === "error") $("errorBox").innerHTML = `<b>${esc(t.step)}</b>\n${esc(t.error)}\n<span class="link" onclick="post('/api/dismiss')">OK</span>`;
+  const p = $("play");
+  p.disabled = !a || busy || !m;
+  p.textContent = t.state === "playing" ? "EN JEU" : t.state === "running" ? "INSTALLATION…" : "JOUER";
+}
+
+function tick() { fetch("/api/state").then(r => r.json()).then(render).catch(() => {}); }
+setInterval(tick, 600); tick();
+
+$("play").onclick = () => post("/api/play");
+$("folderBtn").onclick = () => post("/api/folder");
+$("settingsBtn").onclick = () => {
+  $("ram").value = last.settings.ram_mb; $("ramLabel").textContent = (last.settings.ram_mb / 1024).toFixed(1) + " Go";
+  $("manifest").value = last.settings.manifest_url || "";
+  $("manifest").placeholder = last.manifest_url;
+  $("settings").classList.add("open");
+};
+$("ram").oninput = e => $("ramLabel").textContent = (e.target.value / 1024).toFixed(1) + " Go";
+$("cancelSettings").onclick = () => $("settings").classList.remove("open");
+$("saveSettings").onclick = () => post("/api/settings", {ram_mb: +$("ram").value, manifest_url: $("manifest").value})
+  .then(() => $("settings").classList.remove("open"));
+document.addEventListener("contextmenu", e => e.preventDefault());
+</script>
+</body>
+</html>
