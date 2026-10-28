@@ -216,10 +216,29 @@ function render(s) {
   p.textContent = t.state === "playing" ? "EN JEU" : t.state === "running" ? "INSTALLATION…" : "JOUER";
 }
 
-function tick() { fetch("/api/state").then(r => r.json()).then(render).catch(() => {}); }
+// Launcher injoignable (arrêté ou planté) : on le dit au lieu de rester figé sur « JOUER » ou « EN JEU ».
+let fails = 0;
+function offline() {
+  const p = $("play");
+  p.disabled = true;
+  p.textContent = "LAUNCHER ARRÊTÉ";
+  $("taskBox").classList.add("hidden");
+  $("errorBox").classList.remove("hidden");
+  $("errorBox").innerHTML = "<b>Le launcher ne répond plus</b>\nFerme cette fenêtre et relance SurvivalFrench-Launcher.";
+}
+function tick() {
+  fetch("/api/state").then(r => r.json()).then(s => { fails = 0; render(s); }).catch(() => { if (++fails >= 4) offline(); });
+}
 setInterval(tick, 600); tick();
+// Fenêtre fermée : le launcher s'arrête aussitôt s'il ne joue pas (sans attendre de ne plus avoir de nouvelles).
+addEventListener("pagehide", () => navigator.sendBeacon("/api/bye"));
 
-$("play").onclick = () => post("/api/play");
+$("play").onclick = () => {
+  const p = $("play");
+  p.disabled = true;
+  p.textContent = "INSTALLATION…";
+  post("/api/play").then(r => { if (r.error) alert(r.error); }).catch(offline).finally(tick);
+};
 $("folderBtn").onclick = () => post("/api/folder");
 $("settingsBtn").onclick = () => {
   $("ram").value = last.settings.ram_mb; $("ramLabel").textContent = (last.settings.ram_mb / 1024).toFixed(1) + " Go";

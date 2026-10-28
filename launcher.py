@@ -31,7 +31,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 APP_NAME = "SurvivalFrench Launcher"
-VERSION = "1.2.1"
+VERSION = "1.2.2"
 
 
 def _instance() -> int:
@@ -183,6 +183,12 @@ STATE: dict = {
     "manifest_error": "",
 }
 LAST_PING = time.time()
+# Fenêtre fermée (elle prévient en partant) : le launcher s'arrête peu après s'il ne joue pas.
+WINDOW_CLOSED_AT: float | None = None
+# Sans nouvelles de la fenêtre depuis ce délai (navigateur planté), on la considère fermée. Un navigateur ralentit les
+# fenêtres en arrière-plan jusqu'à une requête par minute : 20 s ne suffisaient pas (le launcher s'arrêtait, sa
+# fenêtre restait figée sur « JOUER » ou « EN JEU »).
+PING_TIMEOUT = 300
 GAME_PROCESS: subprocess.Popen | None = None
 
 
@@ -943,6 +949,35 @@ def build_command(p: dict, acc: dict, m: dict) -> list[str]:
     return [str(p["javaw"])] + jvm + [p["fabric"]["mainClass"]] + game
 
 
+def watch_game(proc: subprocess.Popen, log_path: Path) -> int:
+    """Attend la fin du jeu. Si Minecraft a annoncé son arrêt (« Stopping! » dans son journal) mais que Java reste en
+    mémoire (un fil encore actif l'empêche de se fermer), on le termine au bout de 20 s : sinon le launcher restait
+    « EN JEU » avec un jeu invisible."""
+    stopping_at = None
+    offset = 0
+    tail = b""
+    while True:
+        try:
+            return proc.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            pass
+        if stopping_at is None:
+            try:
+                with open(log_path, "rb") as f:
+                    f.seek(offset)
+                    chunk = f.read()
+                offset += len(chunk)
+                if b"Stopping!" in tail + chunk:
+                    stopping_at = time.time()
+                tail = chunk[-16:] if chunk else tail
+            except OSError:
+                pass
+        elif time.time() - stopping_at > 20:
+            proc.kill()
+            proc.wait()
+            return 0  # arrêt demandé par le joueur : pas une erreur
+
+
 def play() -> None:
     global GAME_PROCESS
     try:
@@ -964,7 +999,7 @@ def play() -> None:
         GAME_PROCESS = subprocess.Popen(cmd, cwd=str(GAME), stdout=log, stderr=subprocess.STDOUT,
                                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         task(state="playing", step="En jeu", progress=1.0, detail="Bon jeu sur " + m.get("name", "le serveur") + " !")
-        code = GAME_PROCESS.wait()
+        code = watch_game(GAME_PROCESS, GAME / "launcher-game.log")
         log.close()
         GAME_PROCESS = None
         if code != 0:
@@ -998,13 +1033,14 @@ class Handler(BaseHTTPRequestHandler):
         self._send(code, json.dumps(obj).encode("utf-8"), "application/json; charset=utf-8")
 
     def do_GET(self) -> None:  # noqa: N802
-        global LAST_PING
+        global LAST_PING, WINDOW_CLOSED_AT
         if self.path in ("/", "/index.html"):
             self._send(200, resource("index.html").read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/logo.png" and resource("logo.png").is_file():
             self._send(200, resource("logo.png").read_bytes(), "image/png")
         elif self.path == "/api/state":
             LAST_PING = time.time()
+            WINDOW_CLOSED_AT = None
             with LOCK:
                 login = dict(STATE["login"]) if STATE["login"] else None
                 self._json({
@@ -1025,6 +1061,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, b"", "text/plain")
 
     def do_POST(self) -> None:  # noqa: N802
+        global WINDOW_CLOSED_AT
         # Seule notre propre page peut piloter le launcher.
         origin = self.headers.get("Origin", "")
         if origin and origin != f"http://127.0.0.1:{UI_PORT}":
@@ -1062,22 +1099,21 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 STATE["account"] = None
             self._json({"ok": True})
-        elif path == "/api/play":
+        elif path in ("/api/play", "/api/play_official"):
+            # L'état passe à « en cours » ici même, sous le verrou : un double clic ne lance pas deux jeux.
             with LOCK:
-                busy = STATE["task"]["state"] in ("running", "playing")
+                busy = STATE["task"]["state"] in ("running", "playing") or GAME_PROCESS is not None
+                if not busy:
+                    STATE["task"].update(state="running", step="Serveur", progress=0.0, detail="Préparation…", error="")
             if busy:
-                self._json({"error": "Déjà en cours."}, 409)
+                self._json({"error": "Le jeu est déjà lancé ou en cours d'installation."}, 409)
             else:
-                threading.Thread(target=play, daemon=True).start()
+                threading.Thread(target=play if path == "/api/play" else play_official, daemon=True).start()
                 self._json({"ok": True})
-        elif path == "/api/play_official":
-            with LOCK:
-                busy = STATE["task"]["state"] in ("running", "playing")
-            if busy:
-                self._json({"error": "Déjà en cours."}, 409)
-            else:
-                threading.Thread(target=play_official, daemon=True).start()
-                self._json({"ok": True})
+        elif path == "/api/bye":
+            # La fenêtre se ferme (ou se recharge : elle redemandera l'état aussitôt)
+            WINDOW_CLOSED_AT = time.time()
+            self._json({"ok": True})
         elif path == "/api/settings":
             with LOCK:
                 s = STATE["settings"]
@@ -1114,19 +1150,27 @@ def open_window(url: str) -> None:
                 os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
                 os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe")):
         if os.path.isfile(exe):
+            # Pas de mise en veille de la page en arrière-plan ou réduite : elle continue de suivre l'état du launcher.
             subprocess.Popen([exe, f"--app={url}", "--window-size=1180,720", f"--user-data-dir={profile}",
-                              "--no-first-run", "--disable-features=Translate"])
+                              "--no-first-run", "--disable-features=Translate",
+                              "--disable-background-timer-throttling", "--disable-renderer-backgrounding",
+                              "--disable-backgrounding-occluded-windows"])
             return
     webbrowser.open(url)
 
 
 def watchdog() -> None:
-    """Ferme le launcher quand sa fenêtre est fermée (plus de nouvelles de l'interface) et que rien ne tourne."""
+    """Ferme le launcher quand sa fenêtre est fermée et que rien ne tourne : la fenêtre prévient en se fermant ; à
+    défaut (navigateur planté), plus aucune nouvelle depuis PING_TIMEOUT."""
     while True:
-        time.sleep(5)
+        time.sleep(2)
         with LOCK:
             busy = STATE["task"]["state"] == "running"
-        if time.time() - LAST_PING > 20 and not busy and GAME_PROCESS is None:
+        if busy or GAME_PROCESS is not None:
+            continue
+        now = time.time()
+        closed = WINDOW_CLOSED_AT is not None and now - WINDOW_CLOSED_AT > 6
+        if closed or now - LAST_PING > PING_TIMEOUT:
             os._exit(0)
 
 
