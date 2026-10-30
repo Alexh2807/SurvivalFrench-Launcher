@@ -1,19 +1,17 @@
-﻿# Construit SurvivalFrench-Launcher.exe à la racine du projet.
+﻿# Construit le launcher (Rust + WebView2) et le dépose à la racine du projet : SurvivalFrench-Launcher.exe.
 # Usage : powershell -ExecutionPolicy Bypass -File launcher\build_exe.ps1
+# Prérequis : Rust (rustup, cible x86_64-pc-windows-msvc) et les outils de compilation C++ de Visual Studio.
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
-$python = Join-Path $root ".tools\pyenv\Scripts\python.exe"
-if (-not (Test-Path $python)) {
-    python -m venv (Join-Path $root ".tools\pyenv")
-    & $python -m pip install -q pyinstaller==6.16.0
+Push-Location $PSScriptRoot
+try {
+    cargo build --release
+    if ($LASTEXITCODE -ne 0) { throw "La compilation a échoué." }
+} finally { Pop-Location }
+$exe = Join-Path $root "SurvivalFrench-Launcher.exe"
+# Un launcher ouvert verrouille son exe : Windows accepte de le renommer, pas de l'écraser.
+if (Test-Path $exe) {
+    try { Remove-Item $exe -ErrorAction Stop } catch { Rename-Item $exe ("SurvivalFrench-Launcher.old-{0}.exe" -f [DateTimeOffset]::Now.ToUnixTimeSeconds()) }
 }
-$work = Join-Path $root "build\launcher"
-& $python -m PyInstaller --noconfirm --clean --onefile --noconsole `
-    --name "SurvivalFrench-Launcher" `
-    --icon (Join-Path $PSScriptRoot "icon.ico") `
-    --add-data "$(Join-Path $PSScriptRoot 'index.html');." `
-    --add-data "$(Join-Path $PSScriptRoot 'launcher.json');." `
-    --add-data "$(Join-Path $PSScriptRoot 'logo.png');." `
-    --distpath $root --workpath $work --specpath $work `
-    (Join-Path $PSScriptRoot "launcher.py")
-Write-Host "OK : $(Join-Path $root 'SurvivalFrench-Launcher.exe')"
+Copy-Item (Join-Path $PSScriptRoot "target\release\SurvivalFrench-Launcher.exe") $exe
+Write-Host ("OK : {0} ({1:N1} Mo)" -f $exe, ((Get-Item $exe).Length / 1MB))

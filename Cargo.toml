@@ -1,0 +1,40 @@
+[package]
+name = "survivalfrench-launcher"
+version = "2.0.0"
+edition = "2021"
+description = "Launcher SurvivalFrench RP"
+build = "build.rs"
+
+[[bin]]
+name = "SurvivalFrench-Launcher"
+path = "src/main.rs"
+
+[dependencies]
+tao = { version = "0.37", default-features = false, features = ["rwh_06"] }
+wry = { version = "0.57", default-features = false, features = ["devtools"] }
+ureq = { version = "3", default-features = false, features = ["native-tls-no-default"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sha1_smol = "1"
+sha2 = "0.10"
+md5 = "0.7"
+base64 = "0.22"
+windows-sys = { version = "0.60", features = [
+    "Win32_Foundation",
+    "Win32_Security_Cryptography",
+    "Win32_System_SystemInformation",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_Graphics_Dwm",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+embed-resource = "3"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
