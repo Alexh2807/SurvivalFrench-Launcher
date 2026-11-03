@@ -207,9 +207,24 @@ pub fn save_settings(s: &Value) {
 
 /// Adresse choisie par le joueur dans les réglages ; vide (ou l'une des adresses connues) = choix automatique.
 pub fn custom_manifest_url() -> Option<String> {
-    let st = STATE.lock().unwrap();
-    let custom = st.settings["manifest_url"].as_str().unwrap_or("").trim().to_string();
-    Some(custom).filter(|c| !c.is_empty() && !config().manifest_urls.contains(c))
+    let custom = STATE.lock().unwrap().settings["manifest_url"].as_str().unwrap_or("").trim().to_string();
+    Some(full_manifest_url(&custom)).filter(|c| !c.is_empty() && !config().manifest_urls.contains(c))
+}
+
+/// « localhost », « 93.1.78.21 » ou « 93.1.78.21:50163 » tapés dans les réglages → adresse complète du manifeste :
+/// l'adresse connue de cet hôte s'il y en a une, sinon le port donné (8163 par défaut).
+fn full_manifest_url(raw: &str) -> String {
+    if raw.is_empty() || raw.contains("://") {
+        return raw.to_string();
+    }
+    let authority = raw.trim_end_matches('/');
+    if !authority.contains(':') {
+        if let Some(known) = config().manifest_urls.iter().find(|u| crate::net::url_host(u).as_deref() == Some(authority)) {
+            return known.clone();
+        }
+        return format!("http://{authority}:8163/launcher/manifest.json");
+    }
+    format!("http://{authority}/launcher/manifest.json")
 }
 
 /// Dernière adresse connue qui a répondu (choix automatique).
