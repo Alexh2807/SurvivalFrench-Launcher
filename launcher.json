@@ -1,5 +1,10 @@
 {
   "manifest_url": "http://88.160.199.246:50163/launcher/manifest.json",
+  "manifest_urls": [
+    "http://localhost:8163/launcher/manifest.json",
+    "http://88.160.199.246:50163/launcher/manifest.json",
+    "http://93.1.78.21:50163/launcher/manifest.json"
+  ],
   "client_id": "",
   "allow_offline": true,
   "update_repo": "Alexh2807/SurvivalFrench-Launcher"

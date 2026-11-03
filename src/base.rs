@@ -98,7 +98,8 @@ pub fn app_dir() -> PathBuf {
 // --------------------------------------------------------------------------------------
 
 pub struct Config {
-    pub manifest_url: String,
+    /// Adresses du serveur par ordre de préférence (localhost, puis chaque box) : la première qui répond sert.
+    pub manifest_urls: Vec<String>,
     pub client_id: String,
     pub allow_offline: bool,
     pub update_repo: String,
@@ -123,8 +124,15 @@ pub fn config() -> &'static Config {
                 }
             }
         }
+        let manifest_url = cfg["manifest_url"].as_str().unwrap_or("").trim().to_string();
+        let mut manifest_urls: Vec<String> = cfg["manifest_urls"].as_array().map(|a| {
+            a.iter().filter_map(|v| v.as_str()).map(|u| u.trim().to_string()).filter(|u| !u.is_empty()).collect()
+        }).unwrap_or_default();
+        if manifest_urls.is_empty() {
+            manifest_urls.push(manifest_url);
+        }
         Config {
-            manifest_url: cfg["manifest_url"].as_str().unwrap_or("").trim().to_string(),
+            manifest_urls,
             client_id: cfg["client_id"].as_str().unwrap_or("").trim().to_string(),
             allow_offline: cfg["allow_offline"].as_bool().unwrap_or(false),
             update_repo: cfg["update_repo"].as_str().unwrap_or("").trim().to_string(),
@@ -197,10 +205,22 @@ pub fn save_settings(s: &Value) {
     let _ = std::fs::write(&paths().settings, serde_json::to_string_pretty(s).unwrap_or_default());
 }
 
-pub fn manifest_url() -> String {
+/// Adresse choisie par le joueur dans les réglages ; vide (ou l'une des adresses connues) = choix automatique.
+pub fn custom_manifest_url() -> Option<String> {
     let st = STATE.lock().unwrap();
     let custom = st.settings["manifest_url"].as_str().unwrap_or("").trim().to_string();
-    if custom.is_empty() { config().manifest_url.clone() } else { custom }
+    Some(custom).filter(|c| !c.is_empty() && !config().manifest_urls.contains(c))
+}
+
+/// Dernière adresse connue qui a répondu (choix automatique).
+pub static ACTIVE_MANIFEST: Mutex<String> = Mutex::new(String::new());
+
+pub fn manifest_url() -> String {
+    if let Some(c) = custom_manifest_url() {
+        return c;
+    }
+    let active = ACTIVE_MANIFEST.lock().unwrap().clone();
+    if active.is_empty() { config().manifest_urls[0].clone() } else { active }
 }
 
 // --------------------------------------------------------------------------------------

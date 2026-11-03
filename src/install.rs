@@ -26,8 +26,14 @@ fn read_json(p: &Path) -> Option<Value> {
 // --------------------------------------------------------------------------------------
 
 pub fn fetch_manifest() -> Option<Value> {
-    let url = manifest_url();
-    match get_json(&url, 8) {
+    let (url, got) = match crate::base::custom_manifest_url() {
+        Some(url) => {
+            let got = get_json(&url, 8);
+            (url, got)
+        }
+        None => probe_manifests(),
+    };
+    match got {
         Ok(m) if m.get("minecraft").is_some() => {
             let installed = is_installed(&m);
             with_state(|st| {
@@ -47,6 +53,43 @@ pub fn fetch_manifest() -> Option<Value> {
             None
         }
     }
+}
+
+/// Toutes les adresses connues en même temps ; garde la première de la liste qui répond (localhost avant les box),
+/// sans attendre les plus lentes une fois qu'aucune mieux placée ne peut plus répondre.
+fn probe_manifests() -> (String, Res<Value>) {
+    let urls = crate::base::config().manifest_urls.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
+    for (i, u) in urls.iter().enumerate() {
+        let (tx, u) = (tx.clone(), u.clone());
+        std::thread::spawn(move || {
+            let r = get_json(&u, 6).and_then(|m| if m.get("minecraft").is_some() { Ok(m) } else { Err(Fail::from("manifeste invalide")) });
+            let _ = tx.send((i, r));
+        });
+    }
+    drop(tx);
+    let mut results: Vec<Option<Res<Value>>> = urls.iter().map(|_| None).collect();
+    let deadline = std::time::Instant::now() + Duration::from_secs(7);
+    loop {
+        // La mieux placée qui a répondu, si toutes celles d'avant ont échoué.
+        let best = results.iter().position(|r| !matches!(r, Some(Err(_))));
+        if let Some(i) = best.filter(|&i| matches!(results[i], Some(Ok(_)))) {
+            *crate::base::ACTIVE_MANIFEST.lock().unwrap() = urls[i].clone();
+            return (urls[i].clone(), results[i].take().unwrap());
+        }
+        if best.is_none() {
+            break;
+        }
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        match rx.recv_timeout(left) {
+            Ok((i, r)) => results[i] = Some(r),
+            Err(_) => break,
+        }
+    }
+    // Aucune ne répond : on garde la dernière adresse active pour le message.
+    let url = manifest_url();
+    let err = results.into_iter().flatten().find_map(|r| r.err()).unwrap_or_else(|| Fail::from("délai dépassé"));
+    (url, Err(err))
 }
 
 /// Toutes les 30 s tant que la fenêtre est ouverte (rien pendant le jeu).
