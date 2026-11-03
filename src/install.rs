@@ -349,7 +349,12 @@ pub fn sync_mods(m: &Value) -> Res<()> {
     let base = manifest_url();
     let mut wanted = std::collections::HashSet::new();
     let mut jobs: Vec<Job> = Vec::new();
-    for md in m["mods"].as_array().into_iter().flatten() {
+    let v5 = v5_render();
+    let mut list: Vec<Value> = m["mods"].as_array().cloned().unwrap_or_default();
+    if v5 {
+        list.extend(V5_MODS.iter().map(|(file, url, sha1, size)| json!({"file": file, "url": url, "sha1": sha1, "size": size})));
+    }
+    for md in &list {
         let name = file_name(s(&md["file"]));
         wanted.insert(name.clone());
         let url = urljoin(&base, s(&md["url"]));
@@ -365,7 +370,77 @@ pub fn sync_mods(m: &Value) -> Res<()> {
             let _ = std::fs::remove_file(entry.path());
         }
     }
+    sync_v5(v5)?;
     sync_shaderpacks(m)
+}
+
+// V5 (essai de développement, réglage « render » du launcher, jamais proposé aux joueurs) : Iris + Sodium et le pack
+// Photon, téléchargés depuis Modrinth, pour comparer un vrai pack de shaders au rendu V4 du mod. Le mod se retire de
+// lui-même quand Iris est présent. Revenir en V4 retire Iris et Sodium (le dossier mods suit la liste).
+const V5_MODS: [(&str, &str, &str, u64); 2] = [
+    ("iris-fabric-1.11.7+mc26.3.jar", "https://cdn.modrinth.com/data/YL57xq9U/versions/vTN4NRGW/iris-fabric-1.11.7%2Bmc26.3.jar",
+     "fa03640ba1e4ef2f7ae3619c6373a06e46d0ba2c", 2850938),
+    ("sodium-fabric-0.9.2+mc26.3.jar", "https://cdn.modrinth.com/data/AANobbMI/versions/bAZQdGpg/sodium-fabric-0.9.2%2Bmc26.3.jar",
+     "9acfe851e36f4fb27d7c5baa224e8bd4e0334283", 1908068),
+];
+const V5_PACK: (&str, &str, &str, u64) = ("photon_v1.4.zip", "https://cdn.modrinth.com/data/lLqFfGNs/versions/BnGklH5y/photon_v1.4.zip",
+    "96c7730f5891a42e39bbf1f0f5a98fa99628a7fe", 3857333);
+const V5_BACKEND_MARKER: &str = "survivalfrench-v5-backend.txt";
+
+pub fn v5_render() -> bool {
+    STATE.lock().unwrap().settings["render"].as_str() == Some("v5")
+}
+
+/// V5 : pack Photon et réglages d'Iris ; Iris ne tourne qu'en OpenGL (l'ancien choix est gardé pour le retour en V4).
+fn sync_v5(v5: bool) -> Res<()> {
+    let game = &paths().game;
+    let marker = game.join("config").join(V5_BACKEND_MARKER);
+    if v5 {
+        let packs = game.join("shaderpacks");
+        std::fs::create_dir_all(&packs)?;
+        let (file, url, sha1, size) = V5_PACK;
+        download(url, &packs.join(file), Some(sha1), Some(size))?;
+        std::fs::create_dir_all(game.join("config"))?;
+        // Garde le pack choisi dans le menu d'Iris s'il est toujours là (copie locale de comparaison, par exemple)
+        let iris = game.join("config").join("iris.properties");
+        let chosen = std::fs::read_to_string(&iris).ok().and_then(|t| t.lines()
+            .find_map(|l| l.strip_prefix("shaderPack=").map(|v| v.trim().to_string())))
+            .filter(|p| !p.is_empty() && packs.join(p).exists())
+            .unwrap_or_else(|| file.to_string());
+        std::fs::write(&iris, format!("enableShaders=true
+shaderPack={chosen}
+"))?;
+        if !marker.exists() {
+            let old = option_value("preferredGraphicsBackend").unwrap_or_else(|| "\"vulkan\"".into());
+            std::fs::write(&marker, &old)?;
+            set_option("preferredGraphicsBackend", "\"opengl\"");
+        }
+    } else if let Ok(old) = std::fs::read_to_string(&marker) {
+        set_option("preferredGraphicsBackend", old.trim());
+        let _ = std::fs::remove_file(&marker);
+    }
+    Ok(())
+}
+
+fn option_value(key: &str) -> Option<String> {
+    let text = std::fs::read_to_string(paths().game.join("options.txt")).ok()?;
+    text.lines().find_map(|l| l.split_once(':').filter(|(k, _)| *k == key).map(|(_, v)| v.to_string()))
+}
+
+fn set_option(key: &str, value: &str) {
+    let path = paths().game.join("options.txt");
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut found = false;
+    let mut out: Vec<String> = text.lines().map(|l| match l.split_once(':') {
+        Some((k, _)) if k == key => { found = true; format!("{key}:{value}") }
+        _ => l.to_string(),
+    }).collect();
+    if !found {
+        out.push(format!("{key}:{value}"));
+    }
+    let _ = std::fs::write(&path, out.join("
+") + "
+");
 }
 
 // Qualité des shaders selon la carte graphique : profil du pack (Complementary : POTATO à ULTRA) et échelle de

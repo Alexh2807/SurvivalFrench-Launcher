@@ -139,7 +139,7 @@ fn ipc(body: &str) {
                 if let Some(r) = msg["ram_mb"].as_u64() {
                     s["ram_mb"] = json!(r.clamp(2048, base::max_ram_mb()));
                 }
-                for key in ["manifest_url", "after_launch", "perf"] {
+                for key in ["manifest_url", "after_launch", "perf", "render"] {
                     if let Some(v) = msg[key].as_str() {
                         s[key] = json!(v.trim());
                     }

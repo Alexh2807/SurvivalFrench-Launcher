@@ -271,7 +271,7 @@ function render() {
 let draft = {};
 function openSettings() {
   const s = S.settings, sys = S.system || {};
-  draft = { ram_mb: s.ram_mb, perf: s.perf || "auto", after_launch: s.after_launch || "hide" };
+  draft = { ram_mb: s.ram_mb, perf: s.perf || "auto", after_launch: s.after_launch || "hide", render: s.render || "v4" };
   const ram = $("ram");
   ram.min = 2048; ram.max = s.ram_max || 8192; ram.step = 512; ram.value = s.ram_mb;
   $("ramMin").textContent = "2 Go"; $("ramMax").textContent = go(ram.max) + " Go";
@@ -298,6 +298,10 @@ function updateRam() {
 }
 function syncChoices() {
   $("perf").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === draft.perf));
+  $("render").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === draft.render));
+  $("renderDesc").textContent = draft.render === "v5"
+    ? "Iris, Sodium et le pack Photon (téléchargés au prochain lancement) ; le rendu du mod se retire."
+    : "Le rendu du mod (shader V4).";
   document.querySelectorAll(".choice").forEach(c => c.classList.toggle("on", c.dataset.after === draft.after_launch));
   const sysEco = S.system && S.system.eco;
   $("perfDesc").textContent = {
@@ -370,10 +374,11 @@ function bindStatic() {
   $("modal").addEventListener("mousedown", e => { if (e.target === $("modal")) closeModal(); });
   $("ram").oninput = updateRam;
   $("perf").querySelectorAll("button").forEach(b => b.onclick = () => { draft.perf = b.dataset.v; syncChoices(); });
+  $("render").querySelectorAll("button").forEach(b => b.onclick = () => { draft.render = b.dataset.v; syncChoices(); });
   document.querySelectorAll(".choice").forEach(c => c.onclick = () => { draft.after_launch = c.dataset.after; syncChoices(); });
   $("folderBtn").onclick = () => send("folder");
   $("saveSettings").onclick = () => {
-    send("settings", { ram_mb: draft.ram_mb, perf: draft.perf, after_launch: draft.after_launch, manifest_url: $("manifest").value });
+    send("settings", { ram_mb: draft.ram_mb, perf: draft.perf, after_launch: draft.after_launch, render: draft.render, manifest_url: $("manifest").value });
     closeSettings();
     toast("Paramètres enregistrés");
   };
@@ -443,9 +448,9 @@ const Demo = {
           { title: "Nouveautés", date: "22/10/2026", text: "Contrats avec séquestre, boutiques, services publics (police, SAMU, pompiers, justice), saisons et météo, missions du jour et réputation." },
           { title: "Routes en pente", date: "29/10/2026", text: "Les routes épousent enfin le relief : pentes douces, virages et véhicules qui suivent le terrain." },
         ] },
-      manifest_error: h === "horsligne" ? "Serveur injoignable" : "", manifest_url: "http://93.1.78.21:50163/launcher/manifest.json",
+      manifest_error: h === "horsligne" ? "Serveur injoignable" : "", manifest_url: "http://88.160.199.246:50163/launcher/manifest.json",
       ping: h === "horsligne" ? null : { ok: true, ms: 38, online: 7, max: 50, players: ["Aurore", "Bastien", "Chloe", "Dylan", "Elias", "Farah", "Gaspard"],
-        motd: "SurvivalFrench RP — la vie réelle, version Minecraft", version: "26.3", address: "93.1.78.21:50565" },
+        motd: "SurvivalFrench RP — la vie réelle, version Minecraft", version: "26.3", address: "88.160.199.246:50565" },
       favicon_v: 0, skin: { v: 0, model: "", source: "default" }, update: { state: "none" }, installed: h !== "premier",
       allow_offline: true, ms_configured: false, official: true,
       system: { ram_mb: 16234, cpus: 8, gpu: "NVIDIA GeForce RTX 4060 Laptop GPU", tier: "high", eco: false },

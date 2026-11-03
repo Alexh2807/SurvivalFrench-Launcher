@@ -178,7 +178,7 @@ pub fn auto_eco() -> bool {
 // --------------------------------------------------------------------------------------
 
 pub fn load_settings() -> Value {
-    let mut s = json!({"ram_mb": 0, "manifest_url": "", "after_launch": "hide", "perf": "auto"});
+    let mut s = json!({"ram_mb": 0, "manifest_url": "", "after_launch": "hide", "perf": "auto", "render": "v4"});
     if let Ok(t) = std::fs::read_to_string(&paths().settings) {
         if let Ok(Value::Object(o)) = serde_json::from_str::<Value>(&t) {
             for (k, v) in o {
